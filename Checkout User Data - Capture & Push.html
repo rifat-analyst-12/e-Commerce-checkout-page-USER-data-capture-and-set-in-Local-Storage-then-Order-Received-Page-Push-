@@ -1,0 +1,177 @@
+<!--
+GTM Custom HTML tag: "Checkout User Data - Capture & Push"
+One tag, trigger: All Pages (Page View)
+
+Internal logic decides what to do based on the URL:
+  - On the checkout page      -> attaches the capture listener
+  - On the order-received page -> reads localStorage and pushes to dataLayer
+  - Any other page             -> does nothing
+
+IMPORTANT - Tag sequencing (still required):
+Open your GA4 Purchase event tag (and/or Google Ads Enhanced Conversions
+tag) -> Advanced Settings -> Tag Sequencing -> "Fire a tag before this tag
+fires" -> select this tag ("Checkout User Data - Capture & Push"). This
+guarantees user_data exists in the dataLayer before the purchase tag reads it.
+-->
+<script>
+(function () {
+
+    // Normalizes any AU phone number format to E.164 (+61XXXXXXXXX),
+    // which is what Google's Enhanced Conversions expects.
+    function normalizeAuPhoneNumber(phoneRaw) {
+        if (!phoneRaw) return "";
+
+        var cleaned = phoneRaw.replace(/[^\d+]/g, "");
+        var hasPlus = cleaned.charAt(0) === "+";
+        var digitsOnly = cleaned.replace(/\+/g, "");
+
+        if (hasPlus) {
+            // Already has a country code (e.g. "+61 2 9265 9333" -> "+61292659333")
+            return "+" + digitsOnly;
+        }
+
+        if (digitsOnly.indexOf("61") === 0 && digitsOnly.length > 9) {
+            // Country code present without the plus (e.g. "61292659333")
+            return "+" + digitsOnly;
+        }
+
+        if (digitsOnly.charAt(0) === "0") {
+            // Standard AU domestic format (e.g. "0292659333", "0412345678")
+            return "+61" + digitsOnly.slice(1);
+        }
+
+        // No leading 0 and no country code - assume domestic AU number
+        return "+61" + digitsOnly;
+    }
+
+    function captureCheckoutUserData(event) {
+
+        var placeOrderBtn = event.target.closest("#place_order");
+        console.log("Place Order Button Found:", placeOrderBtn);
+
+        if (!placeOrderBtn) return;
+
+        var formBodyEl = placeOrderBtn.closest("form.checkout");
+        console.log("Checkout Form Found:", formBodyEl);
+
+        if (!formBodyEl) return;
+
+        var firstNameEL = formBodyEl.querySelector("#billing_first_name");
+        var lastNameEL = formBodyEl.querySelector("#billing_last_name");
+        var emailEL = formBodyEl.querySelector("#billing_email");
+        var phoneEL = formBodyEl.querySelector("#billing_phone");
+        var streetEL = formBodyEl.querySelector("#billing_address_1");
+        var cityEL = formBodyEl.querySelector("#billing_city");
+        var stateEL = formBodyEl.querySelector("#billing_state");
+        var postcodeEL = formBodyEl.querySelector("#billing_postcode");
+        var countryEL = formBodyEl.querySelector("#billing_country");
+
+        var firstName = firstNameEL ? firstNameEL.value.trim() : "";
+        var lastName = lastNameEL ? lastNameEL.value.trim() : "";
+        var email = emailEL ? emailEL.value.trim() : "";
+        var phoneRaw = phoneEL ? phoneEL.value.trim() : "";
+        var phone = normalizeAuPhoneNumber(phoneRaw);
+        var street = streetEL ? streetEL.value.trim() : "";
+        var city = cityEL ? cityEL.value.trim() : "";
+        var state = stateEL ? stateEL.value.trim() : "";
+        var postcode = postcodeEL ? postcodeEL.value.trim() : "";
+        var country = countryEL ? countryEL.value.trim() : "";
+
+        console.log("First Name:", firstName);
+        console.log("Last Name:", lastName);
+        console.log("Email:", email);
+        console.log("Phone (raw):", phoneRaw);
+        console.log("Phone (normalized E.164):", phone);
+        console.log("Street:", street);
+        console.log("City:", city);
+        console.log("State:", state);
+        console.log("Postcode:", postcode);
+        console.log("Country:", country);
+
+        if (email && phone) {
+
+            var userData = {
+                first_name: firstName,
+                last_name: lastName,
+                email: email,
+                phone_number: phone,
+                street: street,
+                city: city,
+                region: state,
+                postal_code: postcode,
+                country: country,
+                _ts: Date.now()
+            };
+
+            localStorage.setItem("wc_checkout_user_data", JSON.stringify(userData));
+            console.log("Checkout user data saved to localStorage:", userData);
+
+        } else {
+            console.log("Required checkout fields missing (email/phone) - not saving");
+        }
+    }
+
+    function pushUserDataToDataLayer() {
+
+        var raw = localStorage.getItem("wc_checkout_user_data");
+        console.log("Stored Checkout User Data (raw):", raw);
+
+        if (!raw) {
+            console.log("No stored checkout user data found");
+            return;
+        }
+
+        var data = JSON.parse(raw);
+        console.log("Stored Checkout User Data (parsed):", data);
+
+        var isExpired = !data._ts || (Date.now() - data._ts) > (60 * 60 * 1000);
+        console.log("Stored data expired?", isExpired);
+
+        if (isExpired) {
+            localStorage.removeItem("wc_checkout_user_data");
+            console.log("Stored checkout user data expired - removed, not pushing");
+            return;
+        }
+
+        var userData = {
+            email: data.email,
+            phone_number: data.phone_number,
+            address: {
+                first_name: data.first_name,
+                last_name: data.last_name,
+                street: data.street,
+                city: data.city,
+                region: data.region,
+                postal_code: data.postal_code,
+                country: data.country
+            }
+        };
+
+        console.log("Pushing user_data to dataLayer:", userData);
+
+        window.dataLayer = window.dataLayer || [];
+        dataLayer.push({
+            event: "dl_user_data",
+            user_data: userData
+        });
+
+        localStorage.removeItem("wc_checkout_user_data");
+        console.log("Cleared stored checkout user data after push");
+    }
+
+    var currentPath = window.location.pathname;
+    var isOrderReceivedPage = currentPath.indexOf("/checkout/order-received/") !== -1;
+    var isCheckoutPage = currentPath.indexOf("/checkout") !== -1 && !isOrderReceivedPage;
+
+    console.log("Current Path:", currentPath);
+    console.log("Is Order Received Page:", isOrderReceivedPage);
+    console.log("Is Checkout Page:", isCheckoutPage);
+
+    if (isOrderReceivedPage) {
+        pushUserDataToDataLayer();
+    } else if (isCheckoutPage) {
+        document.addEventListener('pointerdown', captureCheckoutUserData);
+    }
+
+})();
+</script>
