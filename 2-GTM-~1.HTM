@@ -1,0 +1,62 @@
+<!--
+GTM Custom HTML tag: "Push User Data to dataLayer"
+Fires on: the order-received (thank you) page
+Trigger:  Page View - Page Path contains "/checkout/order-received/"
+          Fire on: DOM Ready
+
+IMPORTANT - Tag sequencing:
+Open your GA4 Purchase event tag (and/or Google Ads Enhanced Conversions
+tag) -> Advanced Settings -> Tag Sequencing -> "Fire a tag before this tag
+fires" -> select this tag. This guarantees user_data exists in the
+dataLayer before the purchase tag fires and reads it.
+-->
+<script>
+(function () {
+
+    var raw = localStorage.getItem("wc_checkout_user_data");
+    console.log("Stored Checkout User Data (raw):", raw);
+
+    if (!raw) {
+        console.log("No stored checkout user data found");
+        return;
+    }
+
+    var data = JSON.parse(raw);
+    console.log("Stored Checkout User Data (parsed):", data);
+
+    var isExpired = !data._ts || (Date.now() - data._ts) > (60 * 60 * 1000);
+    console.log("Stored data expired?", isExpired);
+
+    if (isExpired) {
+        localStorage.removeItem("wc_checkout_user_data");
+        console.log("Stored checkout user data expired - removed, not pushing");
+        return;
+    }
+
+    var userData = {
+        email: data.email,
+        phone_number: data.phone_number,
+        address: {
+            first_name: data.first_name,
+            last_name: data.last_name,
+            street: data.street,
+            city: data.city,
+            region: data.region,
+            postal_code: data.postal_code,
+            country: data.country
+        }
+    };
+
+    console.log("Pushing user_data to dataLayer:", userData);
+
+    window.dataLayer = window.dataLayer || [];
+    dataLayer.push({
+        event: "dl_user_data",
+        user_data: userData
+    });
+
+    localStorage.removeItem("wc_checkout_user_data");
+    console.log("Cleared stored checkout user data after push");
+
+})();
+</script>

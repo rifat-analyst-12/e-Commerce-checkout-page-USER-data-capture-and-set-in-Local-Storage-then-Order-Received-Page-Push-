@@ -1,0 +1,72 @@
+<!--
+GTM Custom HTML tag: "Capture Checkout User Data"
+Fires on: the WooCommerce checkout page (not order-received)
+Trigger: Page View - Page Path contains "/checkout" AND does NOT contain "order-received"
+-->
+<script>
+document.addEventListener('pointerdown', function (event) {
+
+    var placeOrderBtn = event.target.closest("#place_order");
+    console.log("Place Order Button Found:", placeOrderBtn);
+
+    if (!placeOrderBtn) return;
+
+    var formBodyEl = placeOrderBtn.closest("form.checkout");
+    console.log("Checkout Form Found:", formBodyEl);
+
+    if (!formBodyEl) return;
+
+    var firstNameEL = formBodyEl.querySelector("#billing_first_name");
+    var lastNameEL = formBodyEl.querySelector("#billing_last_name");
+    var emailEL = formBodyEl.querySelector("#billing_email");
+    var phoneEL = formBodyEl.querySelector("#billing_phone");
+    var streetEL = formBodyEl.querySelector("#billing_address_1");
+    var cityEL = formBodyEl.querySelector("#billing_city");
+    var stateEL = formBodyEl.querySelector("#billing_state");
+    var postcodeEL = formBodyEl.querySelector("#billing_postcode");
+    var countryEL = formBodyEl.querySelector("#billing_country");
+
+    var firstName = firstNameEL ? firstNameEL.value.trim() : "";
+    var lastName = lastNameEL ? lastNameEL.value.trim() : "";
+    var email = emailEL ? emailEL.value.trim() : "";
+    var phone = phoneEL ? phoneEL.value.trim() : "";
+    var street = streetEL ? streetEL.value.trim() : "";
+    var city = cityEL ? cityEL.value.trim() : "";
+    var state = stateEL ? stateEL.value.trim() : "";
+    var postcode = postcodeEL ? postcodeEL.value.trim() : "";
+    var country = countryEL ? countryEL.value.trim() : "";
+
+    console.log("First Name:", firstName);
+    console.log("Last Name:", lastName);
+    console.log("Email:", email);
+    console.log("Phone:", phone);
+    console.log("Street:", street);
+    console.log("City:", city);
+    console.log("State:", state);
+    console.log("Postcode:", postcode);
+    console.log("Country:", country);
+
+    if (email && phone) {
+
+        var userData = {
+            first_name: firstName,
+            last_name: lastName,
+            email: email,
+            phone_number: phone,
+            street: street,
+            city: city,
+            region: state,
+            postal_code: postcode,
+            country: country,
+            _ts: Date.now()
+        };
+
+        localStorage.setItem("wc_checkout_user_data", JSON.stringify(userData));
+        console.log("Checkout user data saved to localStorage:", userData);
+
+    } else {
+        console.log("Required checkout fields missing (email/phone) - not saving");
+    }
+
+});
+</script>
